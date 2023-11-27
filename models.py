@@ -57,8 +57,8 @@ class DQN(nn.Module):
     super().__init__()
 
     self.fc1 = nn.Linear(in_features=inputs, out_features=64)
-    self.fc2 = nn.Linear(in_features=64, out_features=64)
-    self.fc3 = nn.Linear(in_features=64, out_features=64)
+    self.fc2 = nn.Linear(in_features=64, out_features=128)
+    self.fc3 = nn.Linear(in_features=128, out_features=64)
     self.fc4 = nn.Linear(in_features=64, out_features=32)
     self.out = nn.Linear(in_features=32, out_features=outputs)
 
@@ -116,6 +116,7 @@ class DQNAgent():
 
   def _get_best_action(self, s):
     with torch.no_grad():
+      s = np.array(s)
       action = self.policy_net(torch.tensor([s]).to(
           self.device)).argmax(dim=1).to(self.device).item()
     return action
@@ -129,11 +130,28 @@ class DQNAgent():
 
     if len(self.memory) > self.memory.batch_size:
       experiences = self.memory.sample(self.device)
-      self.learn(experiences)
+      self.double_q_learn(experiences)
+
+  def double_q_learn(self, experiences):
+    states, actions, rewards, next_states, dones = experiences
+    q_selection = self.policy_net(next_states).detach().argmax(1)
+    target_values = self.target_net(next_states).detach()
+    next_q_values = target_values[torch.arange(len(target_values)), q_selection].unsqueeze(1)
+
+    #next_q_values = self.target_net(
+        #next_states).detach().max(1)[0].unsqueeze(1)
+    q_targets = rewards + self.gamma * next_q_values * (1 - dones)
+    #print(f"q targets: {q_targets}")
+    current_q_values = self.policy_net(states).gather(1, actions)
+    #print(f"current q values: {current_q_values}")
+
+    loss = F.mse_loss(current_q_values, q_targets)
+    self.optimizer.zero_grad()
+    loss.backward()
+    self.optimizer.step()  
 
   def learn(self, experiences):
     states, actions, rewards, next_states, dones = experiences
-
     next_q_values = self.target_net(
         next_states).detach().max(1)[0].unsqueeze(1)
     q_targets = rewards + self.gamma * next_q_values * (1 - dones)

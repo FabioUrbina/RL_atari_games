@@ -11,7 +11,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 from itertools import count
 from collections import deque, namedtuple
-
+import joblib
 SEED = 42
 
 def moving_average(data, window):
@@ -62,8 +62,10 @@ def lander_runner(num_episodes, target_update, alpha, eps, eps_decay, gamma, see
         env.render()
       if done:
         rewards.append(episode_reward)
-        plot_rewards(rewards)
-        plt.pause(0.01)
+        print(e)
+        if e % 50 == 0:
+          plot_rewards(rewards)
+          plt.pause(0.01)
         #print(f'Episode {e}: {episode_reward}')
         break
     if e % target_update == 0:
@@ -79,27 +81,28 @@ def lander_runner(num_episodes, target_update, alpha, eps, eps_decay, gamma, see
 
 if __name__ == "__main__":
 
-    run_rewards, agent = lander_runner(
-    num_episodes=1000,
-    target_update=8,
-    alpha=0.0005,
-    eps=1,
-    eps_decay=0.99,
-    gamma=0.999,
-    seed=57,
-    convergence_threshold=210
-    )
+  run_rewards, agent = lander_runner(
+  num_episodes=1000,
+  target_update=8,
+  alpha=0.0005,
+  eps=1,
+  eps_decay=0.99,
+  gamma=0.999,
+  seed=57,
+  convergence_threshold=210
+  )
+  
+  joblib.dump(agent, '/home/fabs/TheProjects/atari_models/doubleq_lunar_lander_bot_128.joblib')
+  plot_rewards(run_rewards)
 
-    plot_rewards(run_rewards)
+  env = gym.make("LunarLander-v2", render_mode="human")
+  observation, info = env.reset()
 
-    env = gym.make("LunarLander-v2", render_mode="human")
-    observation, info = env.reset()
+  for _ in range(10000):
+      action = agent.select_action(observation)  # agent policy that uses the observation and info
+      #action = env.action_space.sample()
+      observation, reward, terminated, truncated, info = env.step(action)
+      if terminated or truncated:
+          observation, info = env.reset()
 
-    for _ in range(10000):
-        action = agent.select_action(observation)  # agent policy that uses the observation and info
-        #action = env.action_space.sample()
-        observation, reward, terminated, truncated, info = env.step(action)
-        if terminated or truncated:
-            observation, info = env.reset()
-
-    env.close()
+  env.close()
